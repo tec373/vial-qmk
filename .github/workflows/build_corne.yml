@@ -15,11 +15,16 @@ jobs:
       - name: Clone Official foostan Firmware
         run: |
           git clone --recursive https://github.com/foostan/kbd_firmware.git
+          # 公式のcrkbdフォルダをQMKの正規の位置にコピー
           cp -r kbd_firmware/keyboards/crkbd ~/qmk_firmware/keyboards/
+          
+          # Vial用の共通キーマップフォルダを、今回のビルド対象の場所に直接複製して確実に認識させる
+          mkdir -p ~/qmk_firmware/keyboards/crkbd/rev4_0/standard/keymaps
+          cp -r kbd_firmware/keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial ~/qmk_firmware/keyboards/crkbd/rev4_0/standard/keymaps/vial
 
       - name: Inject JIS/US Translation Code into Official keymap.c
         run: |
-          TARGET_FILE="$HOME/qmk_firmware/keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial/keymap.c"
+          TARGET_FILE="$HOME/qmk_firmware/keyboards/crkbd/rev4_0/standard/keymaps/vial/keymap.c"
           
           # C言語のトグル処理コードをkeymap.cの先頭付近に埋め込む
           sed -i '/bool process_record_user/i \
