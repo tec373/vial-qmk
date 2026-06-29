@@ -29,12 +29,10 @@ jobs:
           // Optimized Always-On US Keyboard Emulation for JIS Windows
           // ========================================================
           void send_jis_key(uint16_t keycode, bool target_shift, bool os_shift) {
-              // OSが認識しているShift状態と、出したい記号のShift状態を合わせる
               if (os_shift != target_shift) {
                   if (os_shift) { unregister_code(KC_LSFT); } else { register_code(KC_LSFT); }
               }
               tap_code(keycode);
-              // 元のShift状態に戻す
               if (os_shift != target_shift) {
                   if (os_shift) { register_code(KC_LSFT); } else { unregister_code(KC_LSFT); }
               }
@@ -46,18 +44,18 @@ jobs:
               uint16_t base_kc = keycode;
               bool kc_shift = false;
 
-              // VialのS+Key機能（LSFTやRSFTマクロ）が飛んできた場合、ベースキーとShift要素に分解する
+              // VialのS+Key機能（LSFT/RSFT複合マクロ）を検知して分解
               if ((keycode & 0xFF00) == LSFT(0) || (keycode & 0xFF00) == RSFT(0)) {
                   base_kc = keycode & 0xFF;
                   kc_shift = true;
               }
 
+              // チルダ用の「KC_GRV」をキャッチ対象に追加
               switch (base_kc) {
                   case KC_2: case KC_6: case KC_7: case KC_8: case KC_9: case KC_0:
                   case KC_MINS: case KC_EQL: case KC_LBRC: case KC_RBRC:
-                  case KC_SCLN: case KC_QUOT: case KC_BSLS:
+                  case KC_SCLN: case KC_QUOT: case KC_BSLS: case KC_GRV:
                   {
-                      // 物理的に押されているShiftと、Vialの機能によるShiftを総合的に判断する
                       bool physical_shift = (get_mods() & MOD_MASK_SHIFT) || (get_weak_mods() & MOD_MASK_SHIFT);
                       bool logical_shift = physical_shift || kc_shift;
 
@@ -75,15 +73,17 @@ jobs:
                           case KC_SCLN: if (logical_shift) { send_jis_key(KC_QUOT, false, physical_shift); } else { send_jis_key(KC_SCLN, false, physical_shift); } break;
                           case KC_QUOT: if (logical_shift) { send_jis_key(KC_2, true, physical_shift); }     else { send_jis_key(KC_7, true, physical_shift); } break;
                           case KC_BSLS: if (logical_shift) { send_jis_key(KC_INT3, true, physical_shift); }  else { send_jis_key(KC_BSLS, false, physical_shift); } break;
+                          // チルダ（Shiftあり）ならJISの「^」キーにShiftをかけ、バッククォート（Shiftなし）ならJISの「@」キーにShiftをかける
+                          case KC_GRV:  if (logical_shift) { send_jis_key(KC_EQL, true, physical_shift); }   else { send_jis_key(KC_LBRC, true, physical_shift); } break;
                       }
-                      return false; // 翻訳したキーだけを送るため、QMK本来の送信はブロックする
+                      return false;
                   }
               }
               return true;
           }
           EOF
 
-          # 全ての候補ファイルに一括追記
+          # 全ての候補ファイルに一括追記して適用漏れを防ぐ
           find kbd_firmware/src/vial-kb/vial-qmk/keyboards/crkbd -name "keymap.c" -exec sh -c 'cat perfect_patch.c >> "$1"' _ {} \;
 
       # キャッシュを使用してビルドを高速化
