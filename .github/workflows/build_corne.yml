@@ -22,39 +22,39 @@ jobs:
           bool is_us_mode = false;\
           ' "$TARGET_FILE"
 
-          # process_record_userの直後に変換ロジックを割り込ませる（物理入力時のみ判定するように修正）
+          # process_record_userの直後に、安全な0x5F00を使った変換ロジックを割り込ませる
           sed -i '/bool process_record_user(uint16_t keycode, keyrecord_t *record) {/a \
-            if (record->event.pressed) {\
-                if (keycode == 0x7C00) {\
+            if (keycode == 0x5F00) {\
+                if (record->event.pressed) {\
                     is_us_mode = !is_us_mode;\
-                    return false;\
                 }\
-                if (is_us_mode) {\
-                    bool need_shift = false;\
-                    bool is_translated = false;\
-                    uint16_t target_keycode = keycode;\
-                    switch (keycode) {\
-                        case KC_2:    target_keycode = KC_QUOT; need_shift = true;  is_translated = true; break;\
-                        case KC_6:    target_keycode = KC_EQL;  need_shift = false; is_translated = true; break;\
-                        case KC_7:    target_keycode = KC_6;    need_shift = true;  is_translated = true; break;\
-                        case KC_8:    target_keycode = KC_9;    need_shift = true;  is_translated = true; break;\
-                        case KC_9:    target_keycode = KC_0;    need_shift = true;  is_translated = true; break;\
-                        case KC_0:    target_keycode = KC_TRNS; need_shift = false; is_translated = true; break;\
-                        case KC_MINS: target_keycode = KC_INT1; need_shift = false; is_translated = true; break;\
-                        case KC_EQL:  target_keycode = KC_2;    need_shift = true;  is_translated = true; break;\
-                        case KC_LBRC: target_keycode = KC_RBRC; need_shift = false; is_translated = true; break;\
-                        case KC_RBRC: target_keycode = KC_NUHS; need_shift = false; is_translated = true; break;\
-                        case KC_SCLN: target_keycode = KC_7;    need_shift = true;  is_translated = true; break;\
-                        case KC_QUOT: target_keycode = KC_8;    need_shift = true;  is_translated = true; break;\
-                        case KC_BSLS: target_keycode = KC_INT3; need_shift = true;  is_translated = true; break;\
-                    }\
-                    if (is_translated) {\
-                        if (need_shift) { register_code(KC_LSFT); } else { unregister_code(KC_LSFT); }\
-                        register_code(target_keycode);\
-                        unregister_code(target_keycode);\
-                        if (need_shift) { unregister_code(KC_LSFT); }\
-                        return false;\
-                    }\
+                return false;\
+            }\
+            if (is_us_mode && record->event.pressed) {\
+                bool need_shift = false;\
+                bool is_translated = false;\
+                uint16_t target_keycode = keycode;\
+                switch (keycode) {\
+                    case KC_2:    target_keycode = KC_QUOT; need_shift = true;  is_translated = true; break;\
+                    case KC_6:    target_keycode = KC_EQL;  need_shift = false; is_translated = true; break;\
+                    case KC_7:    target_keycode = KC_6;    need_shift = true;  is_translated = true; break;\
+                    case KC_8:    target_keycode = KC_9;    need_shift = true;  is_translated = true; break;\
+                    case KC_9:    target_keycode = KC_0;    need_shift = true;  is_translated = true; break;\
+                    case KC_0:    target_keycode = KC_TRNS; need_shift = false; is_translated = true; break;\
+                    case KC_MINS: target_keycode = KC_INT1; need_shift = false; is_translated = true; break;\
+                    case KC_EQL:  target_keycode = KC_2;    need_shift = true;  is_translated = true; break;\
+                    case KC_LBRC: target_keycode = KC_RBRC; need_shift = false; is_translated = true; break;\
+                    case KC_RBRC: target_keycode = KC_NUHS; need_shift = false; is_translated = true; break;\
+                    case KC_SCLN: target_keycode = KC_7;    need_shift = true;  is_translated = true; break;\
+                    case KC_QUOT: target_keycode = KC_8;    need_shift = true;  is_translated = true; break;\
+                    case KC_BSLS: target_keycode = KC_INT3; need_shift = true;  is_translated = true; break;\
+                }\
+                if (is_translated) {\
+                    if (need_shift) { register_code(KC_LSFT); } else { unregister_code(KC_LSFT); }\
+                    register_code(target_keycode);\
+                    unregister_code(target_keycode);\
+                    if (need_shift) { unregister_code(KC_LSFT); }\
+                    return false;\
                 }\
             }' "$TARGET_FILE"
 
@@ -65,6 +65,15 @@ jobs:
           cp -r ../../../keyboards/crkbd keyboards/
           mkdir -p keyboards/crkbd/rev4_0/standard/keymaps
           cp -r keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial keyboards/crkbd/rev4_0/standard/keymaps/vial
+
+      # ★ ここでQMKビルドのコンパイル中間ファイルをキャッシュします
+      - name: Cache QMK Build Artifacts
+        uses: actions/cache@v4
+        with:
+          path: kbd_firmware/src/vial-kb/vial-qmk/.build
+          key: qmk-build-crkbd-${{ github.run_id }}
+          restore-keys: |
+            qmk-build-crkbd-
 
       - name: Build Official Firmware
         run: |
