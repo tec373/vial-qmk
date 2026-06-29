@@ -13,15 +13,30 @@ jobs:
           git config --global --add safe.directory '*'
           git clone --recursive https://github.com/foostan/kbd_firmware.git
 
-      - name: Inject JIS/US Translation Code into Official keymap.c
+      - name: Setup and Link Folders for Build
         run: |
-          TARGET_FILE="kbd_firmware/keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial/keymap.c"
+          cd kbd_firmware/src/vial-kb/vial-qmk
+          mkdir -p keyboards/
+          cp -r ../../../keyboards/crkbd keyboards/
+          mkdir -p keyboards/crkbd/rev4_0/standard/keymaps
+          cp -r keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial keyboards/crkbd/rev4_0/standard/keymaps/vial
+
+          # 0x5F00をVialに正式に許可する設定をconfig.hへ追記
+          echo "#define VIAL_CUSTOM_KEYCODE_COUNT 1" >> keyboards/crkbd/rev4_0/standard/config.h
+
+      - name: Append JIS/US Translation Code to keymap.c (Absolute Method)
+        run: |
+          TARGET_FILE="kbd_firmware/src/vial-kb/vial-qmk/keyboards/crkbd/rev4_0/standard/keymaps/vial/keymap.c"
           
-          # 一時ファイルにJISパッチ用の完全なC言語コードを作成
-          cat << 'EOF' > patch.c
+          # 関数のオーバーライドを利用してファイルの末尾に直接結合する
+          cat << 'EOF' >> "$TARGET_FILE"
+
+          // ==========================================
+          // JIS/US Translation Patch (Appended)
+          // ==========================================
           bool is_us_mode = false;
-          
-          bool process_record_user_jis(uint16_t keycode, keyrecord_t *record) {
+
+          bool process_record_user(uint16_t keycode, keyrecord_t *record) {
               if (keycode == 0x5F00) {
                   if (record->event.pressed) {
                       is_us_mode = !is_us_mode;
@@ -59,26 +74,10 @@ jobs:
           }
           EOF
 
-          # 元のprocess_record_user関数の直前に関数定義と割り込み処理を安全に結合
-          sed -i '/bool process_record_user/e cat patch.c' "$TARGET_FILE"
-          sed -i '/bool process_record_user(uint16_t keycode, keyrecord_t *record) {/a \    if (!process_record_user_jis(keycode, record)) return false;' "$TARGET_FILE"
-
       - name: Inject Custom Keycode Name into vial.json
         run: |
           JSON_FILE="kbd_firmware/keyboards/crkbd/the-via/crkbd_rev4.json"
-          # vial.jsonの末尾（閉じ括弧の前）にカスタムキーコードの名称定義を挿入する
           sed -i 's/}$/,"customKeycodes": [{"key": "0x5F00", "title": "JIS TRNS", "shortName": "JIS TRNS", "action": "Toggle JIS\/US Translation Mode"}]}/' "$JSON_FILE"
-
-      - name: Setup and Link Folders for Build
-        run: |
-          cd kbd_firmware/src/vial-kb/vial-qmk
-          mkdir -p keyboards/
-          cp -r ../../../keyboards/crkbd keyboards/
-          mkdir -p keyboards/crkbd/rev4_0/standard/keymaps
-          cp -r keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial keyboards/crkbd/rev4_0/standard/keymaps/vial
-
-          # 0x5F00をVialに正式に許可する設定をconfig.hへ追記
-          echo "#define VIAL_CUSTOM_KEYCODE_COUNT 1" >> keyboards/crkbd/rev4_0/standard/config.h
 
       # キャッシュを使用してビルドを高速化
       - name: Cache QMK Build Artifacts
