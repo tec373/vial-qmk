@@ -1,4 +1,4 @@
-name: Build Corne Vial Firmware
+name: Build Corne Official Vial Firmware with JIS Patch
 
 on:
   workflow_dispatch:
@@ -6,26 +6,75 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ghcr.io/qmk/qmk_cli
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Fix git ownership issue
-        run: git config --global --add safe.directory '*'
-
-      - name: Setup QMK
-        run: qmk setup -y
-
-      - name: Build Firmware (Corne v4)
+      - name: Setup QMK CLI
         run: |
+          pip3 install qmk
+          qmk setup -y
+
+      - name: Clone Official foostan Firmware
+        run: |
+          git clone --recursive https://github.com/foostan/kbd_firmware.git
+          cp -r kbd_firmware/keyboards/crkbd ~/qmk_firmware/keyboards/
+
+      - name: Inject JIS/US Translation Code into Official keymap.c
+        run: |
+          TARGET_FILE="$HOME/qmk_firmware/keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial/keymap.c"
+          
+          # C言語のトグル処理コードをkeymap.cの先頭付近に埋め込む
+          sed -i '/bool process_record_user/i \
+          bool is_us_mode = false;\
+          ' "$TARGET_FILE"
+
+          # process_record_userの直後に変換ロジックを割り込ませる
+          sed -i '/bool process_record_user(uint16_t keycode, keyrecord_t *record) {/a \
+            if (keycode == 0x7C00) {\
+                if (record->event.pressed) {\
+                    is_us_mode = !is_us_mode;\
+                }\
+                return false;\
+            }\
+            if (is_us_mode && record->event.pressed) {\
+                bool need_shift = false;\
+                bool is_translated = false;\
+                uint16_t target_keycode = keycode;\
+                switch (keycode) {\
+                    case KC_2:    target_keycode = KC_QUOT; need_shift = true;  is_translated = true; break;\
+                    case KC_6:    target_keycode = KC_EQL;  need_shift = false; is_translated = true; break;\
+                    case KC_7:    target_keycode = KC_6;    need_shift = true;  is_translated = true; break;\
+                    case KC_8:    target_keycode = KC_9;    need_shift = true;  is_translated = true; break;\
+                    case KC_9:    target_keycode = KC_0;    need_shift = true;  is_translated = true; break;\
+                    case KC_0:    target_keycode = KC_TRNS; need_shift = false; is_translated = true; break;\
+                    case KC_MINS: target_keycode = KC_INT1; need_shift = false; is_translated = true; break;\
+                    case KC_EQL:  target_keycode = KC_2;    need_shift = true;  is_translated = true; break;\
+                    case KC_LBRC: target_keycode = KC_RBRC; need_shift = false; is_translated = true; break;\
+                    case KC_RBRC: target_keycode = KC_NUHS; need_shift = false; is_translated = true; break;\
+                    case KC_SCLN: target_keycode = KC_7;    need_shift = true;  is_translated = true; break;\
+                    case KC_QUOT: target_keycode = KC_8;    need_shift = true;  is_translated = true; break;\
+                    case KC_BSLS: target_keycode = KC_INT3; need_shift = true;  is_translated = true; break;\
+                }\
+                if (is_translated) {\
+                    if (need_shift) {\
+                        register_code(KC_LSFT);\
+                    } else {\
+                        unregister_code(KC_LSFT);\
+                    }\
+                    register_code(target_keycode);\
+                    unregister_code(target_keycode);\
+                    if (need_shift) {\
+                        unregister_code(KC_LSFT);\
+                    }\
+                    return false;\
+                }\
+            }' "$TARGET_FILE"
+
+      - name: Build Official Firmware
+        run: |
+          cd ~/qmk_firmware
           qmk compile -kb crkbd/rev4_0/standard -km vial
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: corne_vial_firmware
-          path: '*.uf2'
+          name: corne_official_vial_firmware
+          path: ~/qmk_firmware/*.uf2
