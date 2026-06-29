@@ -17,32 +17,85 @@ jobs:
         run: |
           TARGET_FILE="kbd_firmware/keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial/keymap.c"
           
-          # C言語のトグル処理コードをkeymap.cの先頭付近に埋め込む
-          sed -i '/bool process_record_user/i \
-          bool is_us_mode = false;\
-          ' "$TARGET_FILE"
+          # 一時ファイルにJISパッチ用の完全なC言語コードを作成
+          cat << 'EOF' > patch.c
+          bool is_us_mode = false;
+          
+          bool process_record_user_jis(uint16_t keycode, keyrecord_t *record) {
+              if (keycode == 0x5F00) {
+                  if (record->event.pressed) {
+                      is_us_mode = !is_us_mode;
+                  }
+                  return false;
+              }
+              if (is_us_mode && record->event.pressed) {
+                  bool need_shift = false;
+                  bool is_translated = false;
+                  uint16_t target_keycode = keycode;
+                  switch (keycode) {
+                      case KC_2:    target_keycode = KC_QUOT; need_shift = true;  is_translated = true; break;
+                      case KC_6:    target_keycode = KC_EQL;  need_shift = false; is_translated = true; break;
+                      case KC_7:    target_keycode = KC_6;    need_shift = true;  is_translated = true; break;
+                      case KC_8:    target_keycode = KC_9;    need_shift = true;  is_translated = true; break;
+                      case KC_9:    target_keycode = KC_0;    need_shift = true;  is_translated = true; break;
+                      case KC_0:    target_keycode = KC_TRNS; need_shift = false; is_translated = true; break;
+                      case KC_MINS: target_keycode = KC_INT1; need_shift = false; is_translated = true; break;
+                      case KC_EQL:  target_keycode = KC_2;    need_shift = true;  is_translated = true; break;
+                      case KC_LBRC: target_keycode = KC_RBRC; need_shift = false; is_translated = true; break;
+                      case KC_RBRC: target_keycode = KC_NUHS; need_shift = false; is_translated = true; break;
+                      case KC_SCLN: target_keycode = KC_7;    need_shift = true;  is_translated = true; break;
+                      case KC_QUOT: target_keycode = KC_8;    need_shift = true;  is_translated = true; break;
+                      case KC_BSLS: target_keycode = KC_INT3; need_shift = true;  is_translated = true; break;
+                  }
+                  if (is_translated) {
+                      if (need_shift) { register_code(KC_LSFT); } else { unregister_code(KC_LSFT); }
+                      register_code(target_keycode);
+                      unregister_code(target_keycode);
+                      if (need_shift) { unregister_code(KC_LSFT); }
+                      return false;
+                  }
+              }
+              return true;
+          }
+          EOF
 
-          # process_record_userの直後に、安全な0x5F00を使った変換ロジックを割り込ませる
-          sed -i '/bool process_record_user(uint16_t keycode, keyrecord_t *record) {/a \
-            if (keycode == 0x5F00) {\
-                if (record->event.pressed) {\
-                    is_us_mode = !is_us_mode;\
-                }\
-                return false;\
-            }\
-            if (is_us_mode && record->event.pressed) {\
-                bool need_shift = false;\
-                bool is_translated = false;\
-                uint16_t target_keycode = keycode;\
-                switch (keycode) {\
-                    case KC_2:    target_keycode = KC_QUOT; need_shift = true;  is_translated = true; break;\
-                    case KC_6:    target_keycode = KC_EQL;  need_shift = false; is_translated = true; break;\
-                    case KC_7:    target_keycode = KC_6;    need_shift = true;  is_translated = true; break;\
-                    case KC_8:    target_keycode = KC_9;    need_shift = true;  is_translated = true; break;\
-                    case KC_9:    target_keycode = KC_0;    need_shift = true;  is_translated = true; break;\
-                    case KC_0:    target_keycode = KC_TRNS; need_shift = false; is_translated = true; break;\
-                    case KC_MINS: target_keycode = KC_INT1; need_shift = false; is_translated = true; break;\
-                    case KC_EQL:  target_keycode = KC_2;    need_shift = true;  is_translated = true; break;\
-                    case KC_LBRC: target_keycode = KC_RBRC; need_shift = false; is_translated = true; break;\
-                    case KC_RBRC: target_keycode = KC_NUHS; need_shift = false; is_translated = true; break;\
-                    case KC_SCLN: target_keycode = KC_7;    need_shift = true;  is_translated = true;
+          # 元のprocess_record_user関数の直前に関数定義と割り込み処理を安全に結合
+          sed -i '/bool process_record_user/e cat patch.c' "$TARGET_FILE"
+          sed -i '/bool process_record_user(uint16_t keycode, keyrecord_t *record) {/a \    if (!process_record_user_jis(keycode, record)) return false;' "$TARGET_FILE"
+
+      - name: Inject Custom Keycode Name into vial.json
+        run: |
+          JSON_FILE="kbd_firmware/keyboards/crkbd/the-via/crkbd_rev4.json"
+          # vial.jsonの末尾（閉じ括弧の前）にカスタムキーコードの名称定義を挿入する
+          sed -i 's/}$/,"customKeycodes": [{"key": "0x5F00", "title": "JIS TRNS", "shortName": "JIS TRNS", "action": "Toggle JIS\/US Translation Mode"}]}/' "$JSON_FILE"
+
+      - name: Setup and Link Folders for Build
+        run: |
+          cd kbd_firmware/src/vial-kb/vial-qmk
+          mkdir -p keyboards/
+          cp -r ../../../keyboards/crkbd keyboards/
+          mkdir -p keyboards/crkbd/rev4_0/standard/keymaps
+          cp -r keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial keyboards/crkbd/rev4_0/standard/keymaps/vial
+
+          # 0x5F00をVialに正式に許可する設定をconfig.hへ追記
+          echo "#define VIAL_CUSTOM_KEYCODE_COUNT 1" >> keyboards/crkbd/rev4_0/standard/config.h
+
+      # キャッシュを使用してビルドを高速化
+      - name: Cache QMK Build Artifacts
+        uses: actions/cache@v4
+        with:
+          path: kbd_firmware/src/vial-kb/vial-qmk/.build
+          key: qmk-build-crkbd-${{ github.run_id }}
+          restore-keys: |
+            qmk-build-crkbd-
+
+      - name: Build Official Firmware
+        run: |
+          cd kbd_firmware/src/vial-kb/vial-qmk
+          qmk compile -kb crkbd/rev4_0/standard -km vial
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: corne_official_vial_firmware
+          path: kbd_firmware/src/vial-kb/vial-qmk/*.uf2
