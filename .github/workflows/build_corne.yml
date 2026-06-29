@@ -21,10 +21,7 @@ jobs:
           mkdir -p keyboards/crkbd/rev4_0/standard/keymaps
           cp -r keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial keyboards/crkbd/rev4_0/standard/keymaps/vial
 
-          # 0x5F00をVialに正式に許可する設定をconfig.hへ追記
-          echo "#define VIAL_CUSTOM_KEYCODE_COUNT 1" >> keyboards/crkbd/rev4_0/standard/config.h
-
-      - name: Append Perfect US-Emulation Code to ALL keymap.c files
+      - name: Append Perfect US-Emulation Code (AG_TOGG Override) to ALL keymap.c files
         run: |
           # 一時的にパッチ用のC言語コードを作成
           cat << 'EOF' > perfect_patch.c
@@ -46,15 +43,19 @@ jobs:
           }
 
           bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-              if (keycode == 0x5F00) {
+              // QMK標準の「AG_TOGG」キーコードを検知して、USモードのトグルに流用する
+              if (keycode == AG_TOGG) {
                   if (record->event.pressed) {
                       is_us_mode = !is_us_mode;
                   }
-                  return false;
+                  return false; // 本来のAlt/GUI入れ替え処理は実行させずにブロックする
               }
+
+              // モードOFF、またはキーを離した時は通常の動きに任せる
               if (!is_us_mode || !record->event.pressed) {
                   return true;
               }
+
               bool current_shift = (get_mods() & MOD_MASK_SHIFT) || (get_weak_mods() & MOD_MASK_SHIFT);
               switch (keycode) {
                   case KC_2:
@@ -114,13 +115,8 @@ jobs:
           }
           EOF
 
-          # リポジトリ内のすべての keymap.c にパッチを一網打尽で追記する（確実な適用）
+          # 全ての候補ファイルに一括追記してコンパイル漏れを防ぐ
           find kbd_firmware/src/vial-kb/vial-qmk/keyboards/crkbd -name "keymap.c" -exec sh -c 'cat perfect_patch.c >> "$1"' _ {} \;
-
-      - name: Inject Custom Keycode Name into vial.json
-        run: |
-          JSON_FILE="kbd_firmware/keyboards/crkbd/the-via/crkbd_rev4.json"
-          sed -i 's/}$/,"customKeycodes": [{"key": "0x5F00", "title": "JIS TRNS", "shortName": "JIS TRNS", "action": "Toggle JIS\/US Translation Mode"}]}/' "$JSON_FILE"
 
       # キャッシュを使用してビルドを高速化
       - name: Cache QMK Build Artifacts
