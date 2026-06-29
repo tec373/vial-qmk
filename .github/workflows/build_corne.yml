@@ -21,87 +21,49 @@ jobs:
           mkdir -p keyboards/crkbd/rev4_0/standard/keymaps
           cp -r keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial keyboards/crkbd/rev4_0/standard/keymaps/vial
 
-      - name: Append Always-On US-Emulation Code to ALL keymap.c files
+      - name: Append Optimized Always-On US-Emulation Code to ALL keymap.c files
         run: |
-          # モード切り替えを撤廃し、常時機能するC言語コードを作成
           cat << 'EOF' > perfect_patch.c
 
           // ========================================================
-          // Always-On US Keyboard Emulation for JIS Windows (Appended)
+          // Optimized Always-On US Keyboard Emulation for JIS Windows
           // ========================================================
           void send_jis_key(uint16_t keycode, bool target_shift, bool current_shift) {
               if (current_shift != target_shift) {
                   if (current_shift) { unregister_code(KC_LSFT); } else { register_code(KC_LSFT); }
               }
-              register_code(keycode);
-              unregister_code(keycode);
+              tap_code(keycode); // QMK標準の軽量タップ処理を使用
               if (current_shift != target_shift) {
                   if (current_shift) { register_code(KC_LSFT); } else { unregister_code(KC_LSFT); }
               }
           }
 
           bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-              // キーを離した時は通常のQMKの動きに任せる
-              if (!record->event.pressed) {
-                  return true;
-              }
-
-              // 現在、物理的またはVialの機能（S+Key等）でShiftが押されているか検知
-              bool current_shift = (get_mods() & MOD_MASK_SHIFT) || (get_weak_mods() & MOD_MASK_SHIFT);
-
-              // 常に作動する変換ロジック（USの配置通りにJIS Windowsへ入力させる）
+              // 変換対象のキーのみをキャッチし、それ以外（アルファベット等）は計算せずに即スルーする
               switch (keycode) {
-                  case KC_2:
-                      if (current_shift) { send_jis_key(KC_LBRC, false, current_shift); } // Shift+2 -> @
-                      else { send_jis_key(KC_2, false, current_shift); } // 2 -> 2
-                      return false;
-                  case KC_6:
-                      if (current_shift) { send_jis_key(KC_EQL, true, current_shift); } // Shift+6 -> ^
-                      else { send_jis_key(KC_6, false, current_shift); } // 6 -> 6
-                      return false;
-                  case KC_7:
-                      if (current_shift) { send_jis_key(KC_6, true, current_shift); } // Shift+7 -> &
-                      else { send_jis_key(KC_7, false, current_shift); } // 7 -> 7
-                      return false;
-                  case KC_8:
-                      if (current_shift) { send_jis_key(KC_QUOT, false, current_shift); } // Shift+8 -> *
-                      else { send_jis_key(KC_8, false, current_shift); } // 8 -> 8
-                      return false;
-                  case KC_9:
-                      if (current_shift) { send_jis_key(KC_8, true, current_shift); } // Shift+9 -> (
-                      else { send_jis_key(KC_9, false, current_shift); } // 9 -> 9
-                      return false;
-                  case KC_0:
-                      if (current_shift) { send_jis_key(KC_9, true, current_shift); } // Shift+0 -> )
-                      else { send_jis_key(KC_0, false, current_shift); } // 0 -> 0
-                      return false;
-                  case KC_MINS:
-                      if (current_shift) { send_jis_key(KC_EQL, false, current_shift); } // Shift+- -> _
-                      else { send_jis_key(KC_MINS, false, current_shift); } // - -> -
-                      return false;
-                  case KC_EQL:
-                      if (current_shift) { send_jis_key(KC_EQL, true, current_shift); } // Shift+= -> +
-                      else { send_jis_key(KC_MINS, true, current_shift); } // = -> =
-                      return false;
-                  case KC_LBRC:
-                      if (current_shift) { send_jis_key(KC_RBRC, true, current_shift); } // Shift+[ -> {
-                      else { send_jis_key(KC_RBRC, false, current_shift); } // [ -> [
-                      return false;
-                  case KC_RBRC:
-                      if (current_shift) { send_jis_key(KC_NUHS, true, current_shift); } // Shift+] -> }
-                      else { send_jis_key(KC_NUHS, false, current_shift); } // ] -> ]
-                      return false;
-                  case KC_SCLN:
-                      if (current_shift) { send_jis_key(KC_QUOT, true, current_shift); } // Shift+; -> :
-                      else { send_jis_key(KC_SCLN, false, current_shift); } // ; -> ;
-                      return false;
-                  case KC_QUOT:
-                      if (current_shift) { send_jis_key(KC_2, true, current_shift); } // Shift+' -> "
-                      else { send_jis_key(KC_7, true, current_shift); } // ' -> '
-                      return false;
-                  case KC_BSLS:
-                      if (current_shift) { send_jis_key(KC_INT3, true, current_shift); } // Shift+\ -> |
-                      else { send_jis_key(KC_BSLS, false, current_shift); } // \ -> \
+                  case KC_2: case KC_6: case KC_7: case KC_8: case KC_9: case KC_0:
+                  case KC_MINS: case KC_EQL: case KC_LBRC: case KC_RBRC:
+                  case KC_SCLN: case KC_QUOT: case KC_BSLS:
+                      // キーが押し込まれた瞬間のみ変換処理を実行
+                      if (record->event.pressed) {
+                          bool current_shift = (get_mods() & MOD_MASK_SHIFT) || (get_weak_mods() & MOD_MASK_SHIFT);
+                          switch (keycode) {
+                              case KC_2:    if (current_shift) { send_jis_key(KC_LBRC, false, current_shift); } else { send_jis_key(KC_2, false, current_shift); } break;
+                              case KC_6:    if (current_shift) { send_jis_key(KC_EQL, true, current_shift); }  else { send_jis_key(KC_6, false, current_shift); } break;
+                              case KC_7:    if (current_shift) { send_jis_key(KC_6, true, current_shift); }   else { send_jis_key(KC_7, false, current_shift); } break;
+                              case KC_8:    if (current_shift) { send_jis_key(KC_QUOT, false, current_shift); }else { send_jis_key(KC_8, false, current_shift); } break;
+                              case KC_9:    if (current_shift) { send_jis_key(KC_8, true, current_shift); }   else { send_jis_key(KC_9, false, current_shift); } break;
+                              case KC_0:    if (current_shift) { send_jis_key(KC_9, true, current_shift); }   else { send_jis_key(KC_0, false, current_shift); } break;
+                              case KC_MINS: if (current_shift) { send_jis_key(KC_EQL, false, current_shift); } else { send_jis_key(KC_MINS, false, current_shift); } break;
+                              case KC_EQL:  if (current_shift) { send_jis_key(KC_EQL, true, current_shift); }  else { send_jis_key(KC_MINS, true, current_shift); } break;
+                              case KC_LBRC: if (current_shift) { send_jis_key(KC_RBRC, true, current_shift); } else { send_jis_key(KC_RBRC, false, current_shift); } break;
+                              case KC_RBRC: if (current_shift) { send_jis_key(KC_NUHS, true, current_shift); } else { send_jis_key(KC_NUHS, false, current_shift); } break;
+                              case KC_SCLN: if (current_shift) { send_jis_key(KC_QUOT, true, current_shift); } else { send_jis_key(KC_SCLN, false, current_shift); } break;
+                              case KC_QUOT: if (current_shift) { send_jis_key(KC_2, true, current_shift); }    else { send_jis_key(KC_7, true, current_shift); } break;
+                              case KC_BSLS: if (current_shift) { send_jis_key(KC_INT3, true, current_shift); } else { send_jis_key(KC_BSLS, false, current_shift); } break;
+                          }
+                      }
+                      // 変換対象のキーは、押した時も離した時も元の信号をOSへ流さない（無駄な通信の遮断）
                       return false;
               }
               return true;
