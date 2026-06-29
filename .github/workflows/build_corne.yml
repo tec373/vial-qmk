@@ -10,15 +10,13 @@ jobs:
     steps:
       - name: Clone Official foostan Repository with Submodules
         run: |
-          # Gitのセキュリティ警告を回避
           git config --global --add safe.directory '*'
-          # 公式リポジトリ一式をダウンロード
           git clone --recursive https://github.com/foostan/kbd_firmware.git
 
       - name: Inject JIS/US Translation Code into Official keymap.c
         run: |
-          # 公式リポジトリ内にある、正規のVial用keymap.cのパスを指定
-          TARGET_FILE="kbd_firmware/src/vial-kb/vial-qmk/keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial/keymap.c"
+          # 正しい共通フォルダ内のkeymap.cのパスを指定
+          TARGET_FILE="kbd_firmware/keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial/keymap.c"
           
           # C言語のトグル処理コードをkeymap.cの先頭付近に埋め込む
           sed -i '/bool process_record_user/i \
@@ -67,9 +65,21 @@ jobs:
                 }\
             }' "$TARGET_FILE"
 
+      - name: Setup and Link Folders for Build
+        run: |
+          # QMKのメインシステム（サブモジュール）があるディレクトリに移動
+          cd kbd_firmware/src/vial-kb/vial-qmk
+          
+          # 公式のcrkbdソースフォルダを、ビルドシステムが認識できるようにリンク
+          mkdir -p keyboards/
+          cp -r ../../../keyboards/crkbd keyboards/
+          
+          # ビルド対象の位置にvialキーマップを直接配置
+          mkdir -p keyboards/crkbd/rev4_0/standard/keymaps
+          cp -r keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial keyboards/crkbd/rev4_0/standard/keymaps/vial
+
       - name: Build Official Firmware
         run: |
-          # ダウンロードした公式リポジトリ内のVial用QMKフォルダに移動して直接ビルド
           cd kbd_firmware/src/vial-kb/vial-qmk
           qmk compile -kb crkbd/rev4_0/standard -km vial
 
