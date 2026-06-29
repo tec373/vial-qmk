@@ -18,7 +18,7 @@ jobs:
 
       - name: Build Firmware (Corne v4)
         run: |
-          qmk compile -kb crkbd/rev4_0 -km vial
+          qmk compile -kb crkbd/rev4_0/standard -km vial
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
