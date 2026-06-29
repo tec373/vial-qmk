@@ -67,56 +67,55 @@ jobs:
               // 変換ロジック（US配列の設定値を、JIS設定のWindowsが正しく解釈できる信号へ完全翻訳）
               switch (keycode) {
                   case KC_2:
-                      if (current_shift) { send_jis_key(KC_LBRC, false, current_shift); } // Shift+2 -> @
+                      if (current_shift) { send_jis_key(KC_LBRC, false, current_shift); } // Shift+2 -> At-mark
                       else { send_jis_key(KC_2, false, current_shift); } // 2 -> 2
                       return false;
                   case KC_6:
-                      if (current_shift) { send_jis_key(KC_EQL, true, current_shift); } // Shift+6 -> ^
+                      if (current_shift) { send_jis_key(KC_EQL, true, current_shift); } // Shift+6 -> Caret
                       else { send_jis_key(KC_6, false, current_shift); } // 6 -> 6
                       return false;
                   case KC_7:
-                      if (current_shift) { send_jis_key(KC_6, true, current_shift); } // Shift+7 -> &
+                      if (current_shift) { send_jis_key(KC_6, true, current_shift); } // Shift+7 -> Ampersand
                       else { send_jis_key(KC_7, false, current_shift); } // 7 -> 7
                       return false;
                   case KC_8:
-                      if (current_shift) { send_jis_key(KC_QUOT, false, current_shift); } // Shift+8 -> *
+                      if (current_shift) { send_jis_key(KC_QUOT, false, current_shift); } // Shift+8 -> Asterisk
                       else { send_jis_key(KC_8, false, current_shift); } // 8 -> 8
                       return false;
                   case KC_9:
-                      if (current_shift) { send_jis_key(KC_8, true, current_shift); } // Shift+9 -> (
+                      if (current_shift) { send_jis_key(KC_8, true, current_shift); } // Shift+9 -> Open-paren
                       else { send_jis_key(KC_9, false, current_shift); } // 9 -> 9
                       return false;
                   case KC_0:
-                      if (current_shift) { send_jis_key(KC_9, true, current_shift); } // Shift+0 -> )
+                      if (current_shift) { send_jis_key(KC_9, true, current_shift); } // Shift+0 -> Close-paren
                       else { send_jis_key(KC_0, false, current_shift); } // 0 -> 0
                       return false;
                   case KC_MINS:
-                      if (current_shift) { send_jis_key(KC_EQL, false, current_shift); } // Shift+- -> _
+                      if (current_shift) { send_jis_key(KC_EQL, false, current_shift); } // Shift+- -> Under-score
                       else { send_jis_key(KC_MINS, false, current_shift); } // - -> -
                       return false;
                   case KC_EQL:
-                      if (current_shift) { send_jis_key(KC_EQL, true, current_shift); } // Shift+= -> +
-                      else { send_jis_key(KC_MINS, true, current_shift); } // = -> =
+                      if (current_shift) { send_jis_key(KC_EQL, true, current_shift); } // Shift+= -> Plus
+                      else { send_jis_key(KC_MINS, true, current_shift); } // = -> Equal
                       return false;
                   case KC_LBRC:
-                      if (current_shift) { send_jis_key(KC_RBRC, true, current_shift); } // Shift+[ -> {
-                      else { send_jis_key(KC_RBRC, false, current_shift); } // [ -> [
+                      if (current_shift) { send_jis_key(KC_RBRC, true, current_shift); } // Shift+[ -> Open-brace
+                      else { send_jis_key(KC_RBRC, false, current_shift); } // [ -> Bracket-L
                       return false;
                   case KC_RBRC:
-                      if (current_shift) { send_jis_key(KC_NUHS, true, current_shift); } // Shift+] -> }
-                      else { send_jis_key(KC_NUHS, false, current_shift); } // ] -> ]
-                      return false;
+                      if (current_shift) { send_jis_key(KC_NUHS, true, current_shift); } // Shift+] -> Close-brace
+                      else { send_jis_key(KC_NUHS, false, current_shift); } // ] -> Bracket-R
                   case KC_SCLN:
-                      if (current_shift) { send_jis_key(KC_QUOT, true, current_shift); } // Shift+; -> :
-                      else { send_jis_key(KC_SCLN, false, current_shift); } // ; -> ;
+                      if (current_shift) { send_jis_key(KC_QUOT, true, current_shift); } // Shift+; -> Colon
+                      else { send_jis_key(KC_SCLN, false, current_shift); } // ; -> Semicolon
                       return false;
                   case KC_QUOT:
-                      if (current_shift) { send_jis_key(KC_2, true, current_shift); } // Shift+' -> "
-                      else { send_jis_key(KC_7, true, current_shift); } // ' -> '
+                      if (current_shift) { send_jis_key(KC_2, true, current_shift); } // Shift+' -> Quote
+                      else { send_jis_key(KC_7, true, current_shift); } // ' -> Single-Quote
                       return false;
                   case KC_BSLS:
-                      if (current_shift) { send_jis_key(KC_INT3, true, current_shift); } // Shift+\ -> |
-                      else { send_jis_key(KC_BSLS, false, current_shift); } // \ -> \
+                      if (current_shift) { send_jis_key(KC_INT3, true, current_shift); } // Shift+Backslash -> Pipe
+                      else { send_jis_key(KC_BSLS, false, current_shift); } // Backslash -> Backslash
                       return false;
               }
               return true;
