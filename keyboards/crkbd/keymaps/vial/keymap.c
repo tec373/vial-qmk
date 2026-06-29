@@ -93,7 +93,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 case KC_EQL:  target_keycode = KC_MINS; need_shift = true;  is_translated = true; break; // =
                 case KC_LBRC: target_keycode = KC_RBRC; need_shift = false; is_translated = true; break; // [
                 case KC_RBRC: target_keycode = KC_BSLS; need_shift = false; is_translated = true; break; // ]
-                case KC_BSLS: target_keycode = KC_JYEN; need_shift = false; is_translated = true; break; // バックスラッシュ
+                case KC_BSLS: target_keycode = KC_INT3; need_shift = false; is_translated = true; break; // バックスラッシュ
                 case KC_QUOT: target_keycode = KC_7;    need_shift = true;  is_translated = true; break; // '
             }
         }
