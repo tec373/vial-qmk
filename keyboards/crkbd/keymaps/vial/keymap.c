@@ -18,6 +18,115 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include QMK_KEYBOARD_H
 
+// --- Vial連携と状態記憶（今回コードの利点） ---
+enum custom_keycodes {
+    TOG_JIS = QK_USER_0, // Vialの "Any" キーで 0x7C00 を割り当て
+};
+
+typedef union {
+    uint32_t raw;
+    struct {
+        bool jis_mode : 1;
+    };
+} user_config_t;
+
+user_config_t user_config;
+
+void keyboard_post_init_user(void) {
+    user_config.raw = eeconfig_read_user();
+}
+
+// --- 同時押し対策用バッファ（以前のコードの利点） ---
+static uint16_t translated_keycodes[MATRIX_ROWS][MATRIX_COLS] = {0};
+
+// --- キー入力処理 ---
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    uint8_t row = record->event.key.row;
+    uint8_t col = record->event.key.col;
+
+    // 1. JIS変換モード切替のトグル処理
+    if (keycode == TOG_JIS) {
+        if (record->event.pressed) {
+            user_config.jis_mode = !user_config.jis_mode;
+            eeconfig_update_user(user_config.raw); // 状態を保存
+        }
+        return false;
+    }
+
+    // JIS変換モードがOFFならそのままPCへ送信
+    if (!user_config.jis_mode) {
+        return true;
+    }
+
+    // 2. JIS変換モードON時の裏側自動変換処理（堅牢なタイピングロジック）
+    if (record->event.pressed) {
+        uint8_t real_mods = get_mods();
+        uint8_t weak_mods = get_weak_mods();
+        bool is_shift = ((real_mods | weak_mods) & MOD_MASK_SHIFT) != 0;
+
+        uint16_t target_keycode = keycode;
+        bool need_shift = is_shift;
+        bool is_translated = false;
+
+        if (is_shift) {
+            // 【US配列でShiftを押しながら入力する記号】
+            switch (keycode) {
+                case KC_GRV:  target_keycode = KC_EQL;  need_shift = true;  is_translated = true; break; // ~
+                case KC_2:    target_keycode = KC_LBRC; need_shift = false; is_translated = true; break; // @
+                case KC_6:    target_keycode = KC_EQL;  need_shift = false; is_translated = true; break; // ^
+                case KC_7:    target_keycode = KC_6;    need_shift = true;  is_translated = true; break; // &
+                case KC_8:    target_keycode = KC_QUOT; need_shift = true;  is_translated = true; break; // *
+                case KC_9:    target_keycode = KC_8;    need_shift = true;  is_translated = true; break; // (
+                case KC_0:    target_keycode = KC_9;    need_shift = true;  is_translated = true; break; // )
+                case KC_MINS: target_keycode = KC_INT1; need_shift = true;  is_translated = true; break; // _
+                case KC_EQL:  target_keycode = KC_SCLN; need_shift = true;  is_translated = true; break; // +
+                case KC_LBRC: target_keycode = KC_RBRC; need_shift = true;  is_translated = true; break; // {
+                case KC_RBRC: target_keycode = KC_BSLS; need_shift = true;  is_translated = true; break; // }
+                case KC_BSLS: target_keycode = KC_JYEN; need_shift = true;  is_translated = true; break; // |
+                case KC_SCLN: target_keycode = KC_QUOT; need_shift = false; is_translated = true; break; // :
+                case KC_QUOT: target_keycode = KC_2;    need_shift = true;  is_translated = true; break; // "
+            }
+        } else {
+            // 【US配列で単体（Shiftなし）で入力する記号】
+            switch (keycode) {
+                case KC_GRV:  target_keycode = KC_LBRC; need_shift = true;  is_translated = true; break; // `
+                case KC_EQL:  target_keycode = KC_MINS; need_shift = true;  is_translated = true; break; // =
+                case KC_LBRC: target_keycode = KC_RBRC; need_shift = false; is_translated = true; break; // [
+                case KC_RBRC: target_keycode = KC_BSLS; need_shift = false; is_translated = true; break; // ]
+                case KC_BSLS: target_keycode = KC_JYEN; need_shift = false; is_translated = true; break; // \
+                case KC_QUOT: target_keycode = KC_7;    need_shift = true;  is_translated = true; break; // '
+            }
+        }
+
+        if (is_translated) {
+            del_mods(MOD_MASK_SHIFT);
+            del_weak_mods(MOD_MASK_SHIFT);
+            send_keyboard_report();
+
+            if (need_shift) {
+                add_weak_mods(MOD_BIT(KC_LSFT));
+            }
+            register_code(target_keycode);
+
+            set_mods(real_mods);
+            set_weak_mods(weak_mods);
+
+            translated_keycodes[row][col] = target_keycode;
+            return false;
+        }
+
+    // --- キーが離された瞬間の処理 ---
+    } else {
+        if (translated_keycodes[row][col] != 0) {
+            unregister_code(translated_keycodes[row][col]);
+            translated_keycodes[row][col] = 0;
+            return false;
+        }
+    }
+
+    return true;
+}
+
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
   [0] = LAYOUT_split_3x6_3(
   //,-----------------------------------------------------.                    ,-----------------------------------------------------.
