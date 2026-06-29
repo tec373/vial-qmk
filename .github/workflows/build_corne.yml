@@ -8,23 +8,17 @@ jobs:
     runs-on: ubuntu-latest
     container: ghcr.io/qmk/qmk_cli
     steps:
-      - name: Setup QMK CLI
+      - name: Clone Official foostan Repository with Submodules
         run: |
-          qmk setup -y
-
-      - name: Clone Official foostan Firmware
-        run: |
+          # Gitのセキュリティ警告を回避
+          git config --global --add safe.directory '*'
+          # 公式リポジトリ一式をダウンロード
           git clone --recursive https://github.com/foostan/kbd_firmware.git
-          # 公式のcrkbdフォルダをQMKの正規の位置にコピー
-          cp -r kbd_firmware/keyboards/crkbd ~/qmk_firmware/keyboards/
-          
-          # Vial用の共通キーマップフォルダを、今回のビルド対象の場所に直接複製して確実に認識させる
-          mkdir -p ~/qmk_firmware/keyboards/crkbd/rev4_0/standard/keymaps
-          cp -r kbd_firmware/keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial ~/qmk_firmware/keyboards/crkbd/rev4_0/standard/keymaps/vial
 
       - name: Inject JIS/US Translation Code into Official keymap.c
         run: |
-          TARGET_FILE="$HOME/qmk_firmware/keyboards/crkbd/rev4_0/standard/keymaps/vial/keymap.c"
+          # 公式リポジトリ内にある、正規のVial用keymap.cのパスを指定
+          TARGET_FILE="kbd_firmware/src/vial-kb/vial-qmk/keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial/keymap.c"
           
           # C言語のトグル処理コードをkeymap.cの先頭付近に埋め込む
           sed -i '/bool process_record_user/i \
@@ -75,11 +69,12 @@ jobs:
 
       - name: Build Official Firmware
         run: |
-          cd ~/qmk_firmware
+          # ダウンロードした公式リポジトリ内のVial用QMKフォルダに移動して直接ビルド
+          cd kbd_firmware/src/vial-kb/vial-qmk
           qmk compile -kb crkbd/rev4_0/standard -km vial
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: corne_official_vial_firmware
-          path: ~/qmk_firmware/*.uf2
+          path: kbd_firmware/src/vial-kb/vial-qmk/*.uf2
