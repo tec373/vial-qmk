@@ -28,49 +28,62 @@ jobs:
           // ========================================================
           // Optimized Always-On US Keyboard Emulation for JIS Windows
           // ========================================================
-          void send_jis_key(uint16_t keycode, bool target_shift, bool current_shift) {
-              if (current_shift != target_shift) {
-                  if (current_shift) { unregister_code(KC_LSFT); } else { register_code(KC_LSFT); }
+          void send_jis_key(uint16_t keycode, bool target_shift, bool os_shift) {
+              // OSが認識しているShift状態と、出したい記号のShift状態を合わせる
+              if (os_shift != target_shift) {
+                  if (os_shift) { unregister_code(KC_LSFT); } else { register_code(KC_LSFT); }
               }
-              tap_code(keycode); // QMK標準の軽量タップ処理を使用
-              if (current_shift != target_shift) {
-                  if (current_shift) { register_code(KC_LSFT); } else { unregister_code(KC_LSFT); }
+              tap_code(keycode);
+              // 元のShift状態に戻す
+              if (os_shift != target_shift) {
+                  if (os_shift) { register_code(KC_LSFT); } else { unregister_code(KC_LSFT); }
               }
           }
 
           bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-              // 変換対象のキーのみをキャッチし、それ以外（アルファベット等）は計算せずに即スルーする
-              switch (keycode) {
+              if (!record->event.pressed) { return true; }
+
+              uint16_t base_kc = keycode;
+              bool kc_shift = false;
+
+              // VialのS+Key機能（LSFTやRSFTマクロ）が飛んできた場合、ベースキーとShift要素に分解する
+              if ((keycode & 0xFF00) == LSFT(0) || (keycode & 0xFF00) == RSFT(0)) {
+                  base_kc = keycode & 0xFF;
+                  kc_shift = true;
+              }
+
+              switch (base_kc) {
                   case KC_2: case KC_6: case KC_7: case KC_8: case KC_9: case KC_0:
                   case KC_MINS: case KC_EQL: case KC_LBRC: case KC_RBRC:
                   case KC_SCLN: case KC_QUOT: case KC_BSLS:
-                      // キーが押し込まれた瞬間のみ変換処理を実行
-                      if (record->event.pressed) {
-                          bool current_shift = (get_mods() & MOD_MASK_SHIFT) || (get_weak_mods() & MOD_MASK_SHIFT);
-                          switch (keycode) {
-                              case KC_2:    if (current_shift) { send_jis_key(KC_LBRC, false, current_shift); } else { send_jis_key(KC_2, false, current_shift); } break;
-                              case KC_6:    if (current_shift) { send_jis_key(KC_EQL, true, current_shift); }  else { send_jis_key(KC_6, false, current_shift); } break;
-                              case KC_7:    if (current_shift) { send_jis_key(KC_6, true, current_shift); }   else { send_jis_key(KC_7, false, current_shift); } break;
-                              case KC_8:    if (current_shift) { send_jis_key(KC_QUOT, false, current_shift); }else { send_jis_key(KC_8, false, current_shift); } break;
-                              case KC_9:    if (current_shift) { send_jis_key(KC_8, true, current_shift); }   else { send_jis_key(KC_9, false, current_shift); } break;
-                              case KC_0:    if (current_shift) { send_jis_key(KC_9, true, current_shift); }   else { send_jis_key(KC_0, false, current_shift); } break;
-                              case KC_MINS: if (current_shift) { send_jis_key(KC_EQL, false, current_shift); } else { send_jis_key(KC_MINS, false, current_shift); } break;
-                              case KC_EQL:  if (current_shift) { send_jis_key(KC_EQL, true, current_shift); }  else { send_jis_key(KC_MINS, true, current_shift); } break;
-                              case KC_LBRC: if (current_shift) { send_jis_key(KC_RBRC, true, current_shift); } else { send_jis_key(KC_RBRC, false, current_shift); } break;
-                              case KC_RBRC: if (current_shift) { send_jis_key(KC_NUHS, true, current_shift); } else { send_jis_key(KC_NUHS, false, current_shift); } break;
-                              case KC_SCLN: if (current_shift) { send_jis_key(KC_QUOT, true, current_shift); } else { send_jis_key(KC_SCLN, false, current_shift); } break;
-                              case KC_QUOT: if (current_shift) { send_jis_key(KC_2, true, current_shift); }    else { send_jis_key(KC_7, true, current_shift); } break;
-                              case KC_BSLS: if (current_shift) { send_jis_key(KC_INT3, true, current_shift); } else { send_jis_key(KC_BSLS, false, current_shift); } break;
-                          }
+                  {
+                      // 物理的に押されているShiftと、Vialの機能によるShiftを総合的に判断する
+                      bool physical_shift = (get_mods() & MOD_MASK_SHIFT) || (get_weak_mods() & MOD_MASK_SHIFT);
+                      bool logical_shift = physical_shift || kc_shift;
+
+                      switch (base_kc) {
+                          case KC_2:    if (logical_shift) { send_jis_key(KC_LBRC, false, physical_shift); } else { send_jis_key(KC_2, false, physical_shift); } break;
+                          case KC_6:    if (logical_shift) { send_jis_key(KC_EQL, false, physical_shift); }  else { send_jis_key(KC_6, false, physical_shift); } break;
+                          case KC_7:    if (logical_shift) { send_jis_key(KC_6, true, physical_shift); }     else { send_jis_key(KC_7, false, physical_shift); } break;
+                          case KC_8:    if (logical_shift) { send_jis_key(KC_QUOT, true, physical_shift); }  else { send_jis_key(KC_8, false, physical_shift); } break;
+                          case KC_9:    if (logical_shift) { send_jis_key(KC_8, true, physical_shift); }     else { send_jis_key(KC_9, false, physical_shift); } break;
+                          case KC_0:    if (logical_shift) { send_jis_key(KC_9, true, physical_shift); }     else { send_jis_key(KC_0, false, physical_shift); } break;
+                          case KC_MINS: if (logical_shift) { send_jis_key(KC_INT1, true, physical_shift); }  else { send_jis_key(KC_MINS, false, physical_shift); } break;
+                          case KC_EQL:  if (logical_shift) { send_jis_key(KC_SCLN, true, physical_shift); }  else { send_jis_key(KC_MINS, true, physical_shift); } break;
+                          case KC_LBRC: if (logical_shift) { send_jis_key(KC_RBRC, true, physical_shift); }  else { send_jis_key(KC_RBRC, false, physical_shift); } break;
+                          case KC_RBRC: if (logical_shift) { send_jis_key(KC_NUHS, true, physical_shift); }  else { send_jis_key(KC_NUHS, false, physical_shift); } break;
+                          case KC_SCLN: if (logical_shift) { send_jis_key(KC_QUOT, false, physical_shift); } else { send_jis_key(KC_SCLN, false, physical_shift); } break;
+                          case KC_QUOT: if (logical_shift) { send_jis_key(KC_2, true, physical_shift); }     else { send_jis_key(KC_7, true, physical_shift); } break;
+                          case KC_BSLS: if (logical_shift) { send_jis_key(KC_INT3, true, physical_shift); }  else { send_jis_key(KC_BSLS, false, physical_shift); } break;
                       }
-                      // 変換対象のキーは、押した時も離した時も元の信号をOSへ流さない（無駄な通信の遮断）
-                      return false;
+                      return false; // 翻訳したキーだけを送るため、QMK本来の送信はブロックする
+                  }
               }
               return true;
           }
           EOF
 
-          # 全ての候補ファイルに一括追記して適用漏れを防ぐ
+          # 全ての候補ファイルに一括追記
           find kbd_firmware/src/vial-kb/vial-qmk/keyboards/crkbd -name "keymap.c" -exec sh -c 'cat perfect_patch.c >> "$1"' _ {} \;
 
       # キャッシュを使用してビルドを高速化
