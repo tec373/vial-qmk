@@ -24,18 +24,16 @@ jobs:
           # 0x5F00をVialに正式に許可する設定をconfig.hへ追記
           echo "#define VIAL_CUSTOM_KEYCODE_COUNT 1" >> keyboards/crkbd/rev4_0/standard/config.h
 
-      - name: Append Perfect US-Emulation Code to keymap.c
+      - name: Append Perfect US-Emulation Code to ALL keymap.c files
         run: |
-          TARGET_FILE="kbd_firmware/src/vial-kb/vial-qmk/keyboards/crkbd/rev4_0/standard/keymaps/vial/keymap.c"
-          
-          cat << 'EOF' >> "$TARGET_FILE"
+          # 一時的にパッチ用のC言語コードを作成
+          cat << 'EOF' > perfect_patch.c
 
           // ========================================================
           // Perfect US Keyboard Emulation for JIS Windows (Appended)
           // ========================================================
           bool is_us_mode = false;
 
-          // シフト状態を一時的に解除または付与して、安全にキーを叩く補助関数
           void send_jis_key(uint16_t keycode, bool target_shift, bool current_shift) {
               if (current_shift != target_shift) {
                   if (current_shift) { unregister_code(KC_LSFT); } else { register_code(KC_LSFT); }
@@ -48,80 +46,76 @@ jobs:
           }
 
           bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-              // トグルキー（0x5F00）の処理
               if (keycode == 0x5F00) {
                   if (record->event.pressed) {
                       is_us_mode = !is_us_mode;
                   }
                   return false;
               }
-
-              // モードOFF、またはキーを離した時はQMK標準の動きに任せる
               if (!is_us_mode || !record->event.pressed) {
                   return true;
               }
-
-              // 現在、物理的またはVialの機能（S+Key等）でShiftが押されているか検知
               bool current_shift = (get_mods() & MOD_MASK_SHIFT) || (get_weak_mods() & MOD_MASK_SHIFT);
-
-              // 変換ロジック（US配列の設定値を、JIS設定のWindowsが正しく解釈できる信号へ完全翻訳）
               switch (keycode) {
                   case KC_2:
-                      if (current_shift) { send_jis_key(KC_LBRC, false, current_shift); } // Shift+2 -> At-mark
-                      else { send_jis_key(KC_2, false, current_shift); } // 2 -> 2
+                      if (current_shift) { send_jis_key(KC_LBRC, false, current_shift); }
+                      else { send_jis_key(KC_2, false, current_shift); }
                       return false;
                   case KC_6:
-                      if (current_shift) { send_jis_key(KC_EQL, true, current_shift); } // Shift+6 -> Caret
-                      else { send_jis_key(KC_6, false, current_shift); } // 6 -> 6
+                      if (current_shift) { send_jis_key(KC_EQL, true, current_shift); }
+                      else { send_jis_key(KC_6, false, current_shift); }
                       return false;
                   case KC_7:
-                      if (current_shift) { send_jis_key(KC_6, true, current_shift); } // Shift+7 -> Ampersand
-                      else { send_jis_key(KC_7, false, current_shift); } // 7 -> 7
+                      if (current_shift) { send_jis_key(KC_6, true, current_shift); }
+                      else { send_jis_key(KC_7, false, current_shift); }
                       return false;
                   case KC_8:
-                      if (current_shift) { send_jis_key(KC_QUOT, false, current_shift); } // Shift+8 -> Asterisk
-                      else { send_jis_key(KC_8, false, current_shift); } // 8 -> 8
+                      if (current_shift) { send_jis_key(KC_QUOT, false, current_shift); }
+                      else { send_jis_key(KC_8, false, current_shift); }
                       return false;
                   case KC_9:
-                      if (current_shift) { send_jis_key(KC_8, true, current_shift); } // Shift+9 -> Open-paren
-                      else { send_jis_key(KC_9, false, current_shift); } // 9 -> 9
+                      if (current_shift) { send_jis_key(KC_8, true, current_shift); }
+                      else { send_jis_key(KC_9, false, current_shift); }
                       return false;
                   case KC_0:
-                      if (current_shift) { send_jis_key(KC_9, true, current_shift); } // Shift+0 -> Close-paren
-                      else { send_jis_key(KC_0, false, current_shift); } // 0 -> 0
+                      if (current_shift) { send_jis_key(KC_9, true, current_shift); }
+                      else { send_jis_key(KC_0, false, current_shift); }
                       return false;
                   case KC_MINS:
-                      if (current_shift) { send_jis_key(KC_EQL, false, current_shift); } // Shift+- -> Under-score
-                      else { send_jis_key(KC_MINS, false, current_shift); } // - -> -
+                      if (current_shift) { send_jis_key(KC_EQL, false, current_shift); }
+                      else { send_jis_key(KC_MINS, false, current_shift); }
                       return false;
                   case KC_EQL:
-                      if (current_shift) { send_jis_key(KC_EQL, true, current_shift); } // Shift+= -> Plus
-                      else { send_jis_key(KC_MINS, true, current_shift); } // = -> Equal
+                      if (current_shift) { send_jis_key(KC_EQL, true, current_shift); }
+                      else { send_jis_key(KC_MINS, true, current_shift); }
                       return false;
                   case KC_LBRC:
-                      if (current_shift) { send_jis_key(KC_RBRC, true, current_shift); } // Shift+[ -> Open-brace
-                      else { send_jis_key(KC_RBRC, false, current_shift); } // [ -> Bracket-L
+                      if (current_shift) { send_jis_key(KC_RBRC, true, current_shift); }
+                      else { send_jis_key(KC_RBRC, false, current_shift); }
                       return false;
                   case KC_RBRC:
-                      if (current_shift) { send_jis_key(KC_NUHS, true, current_shift); } // Shift+] -> Close-brace
-                      else { send_jis_key(KC_NUHS, false, current_shift); } // ] -> Bracket-R
-                      return false; // ★前回の修正でここが抜けていたため追加
+                      if (current_shift) { send_jis_key(KC_NUHS, true, current_shift); }
+                      else { send_jis_key(KC_NUHS, false, current_shift); }
+                      return false;
                   case KC_SCLN:
-                      if (current_shift) { send_jis_key(KC_QUOT, true, current_shift); } // Shift+; -> Colon
-                      else { send_jis_key(KC_SCLN, false, current_shift); } // ; -> Semicolon
+                      if (current_shift) { send_jis_key(KC_QUOT, true, current_shift); }
+                      else { send_jis_key(KC_SCLN, false, current_shift); }
                       return false;
                   case KC_QUOT:
-                      if (current_shift) { send_jis_key(KC_2, true, current_shift); } // Shift+' -> Quote
-                      else { send_jis_key(KC_7, true, current_shift); } // ' -> Single-Quote
+                      if (current_shift) { send_jis_key(KC_2, true, current_shift); }
+                      else { send_jis_key(KC_7, true, current_shift); }
                       return false;
                   case KC_BSLS:
-                      if (current_shift) { send_jis_key(KC_INT3, true, current_shift); } // Shift+Backslash -> Pipe
-                      else { send_jis_key(KC_BSLS, false, current_shift); } // Backslash -> Backslash
+                      if (current_shift) { send_jis_key(KC_INT3, true, current_shift); }
+                      else { send_jis_key(KC_BSLS, false, current_shift); }
                       return false;
               }
               return true;
           }
           EOF
+
+          # リポジトリ内のすべての keymap.c にパッチを一網打尽で追記する（確実な適用）
+          find kbd_firmware/src/vial-kb/vial-qmk/keyboards/crkbd -name "keymap.c" -exec sh -c 'cat perfect_patch.c >> "$1"' _ {} \;
 
       - name: Inject Custom Keycode Name into vial.json
         run: |
