@@ -105,6 +105,7 @@ jobs:
                   case KC_RBRC:
                       if (current_shift) { send_jis_key(KC_NUHS, true, current_shift); } // Shift+] -> Close-brace
                       else { send_jis_key(KC_NUHS, false, current_shift); } // ] -> Bracket-R
+                      return false; // ★前回の修正でここが抜けていたため追加
                   case KC_SCLN:
                       if (current_shift) { send_jis_key(KC_QUOT, true, current_shift); } // Shift+; -> Colon
                       else { send_jis_key(KC_SCLN, false, current_shift); } // ; -> Semicolon
