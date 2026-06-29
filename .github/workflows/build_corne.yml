@@ -1,4 +1,4 @@
-name: Build Corne Official Vial Firmware with Always-On US-to-JIS Mode
+name: Build Corne Official Vial Firmware with Switchable US-to-JIS Mode
 
 on:
   workflow_dispatch:
@@ -21,13 +21,15 @@ jobs:
           mkdir -p keyboards/crkbd/rev4_0/standard/keymaps
           cp -r keyboards/crkbd/vial-kb/vial-qmk/keymaps/vial keyboards/crkbd/rev4_0/standard/keymaps/vial
 
-      - name: Append Optimized Always-On US-Emulation Code to ALL keymap.c files
+      - name: Append Optimized Toggle-enabled US-Emulation Code to ALL keymap.c files
         run: |
           cat << 'EOF' > perfect_patch.c
 
           // ========================================================
-          // Optimized Always-On US Keyboard Emulation for JIS Windows
+          // Optimized Switchable US Keyboard Emulation for JIS Windows
           // ========================================================
+          bool is_us_mode = true; // 起動時の初期状態を「ON（USエミュレーション）」に設定
+
           void send_jis_key(uint16_t keycode, bool target_shift, bool os_shift) {
               if (os_shift != target_shift) {
                   if (os_shift) { unregister_code(KC_LSFT); } else { register_code(KC_LSFT); }
@@ -39,6 +41,14 @@ jobs:
           }
 
           bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+              // F24キーが押されたら、変換モードのON/OFFを反転させる（WindowsへのF24送信はブロック）
+              if (keycode == KC_F24) {
+                  if (record->event.pressed) {
+                      is_us_mode = !is_us_mode;
+                  }
+                  return false;
+              }
+
               if (!record->event.pressed) { return true; }
 
               uint16_t base_kc = keycode;
@@ -50,12 +60,17 @@ jobs:
                   kc_shift = true;
               }
 
-              // チルダ用の「KC_GRV」をキャッチ対象に追加
+              // 変換対象の記号キーだけをキャッチ（A~Zなどはここを即通過してCPU負荷をゼロにする）
               switch (base_kc) {
                   case KC_2: case KC_6: case KC_7: case KC_8: case KC_9: case KC_0:
                   case KC_MINS: case KC_EQL: case KC_LBRC: case KC_RBRC:
                   case KC_SCLN: case KC_QUOT: case KC_BSLS: case KC_GRV:
                   {
+                      // 変換対象キーであっても、モードがOFFなら何もせず通常の挙動（JIS）としてOSへ流す
+                      if (!is_us_mode) {
+                          return true;
+                      }
+
                       bool physical_shift = (get_mods() & MOD_MASK_SHIFT) || (get_weak_mods() & MOD_MASK_SHIFT);
                       bool logical_shift = physical_shift || kc_shift;
 
@@ -73,7 +88,6 @@ jobs:
                           case KC_SCLN: if (logical_shift) { send_jis_key(KC_QUOT, false, physical_shift); } else { send_jis_key(KC_SCLN, false, physical_shift); } break;
                           case KC_QUOT: if (logical_shift) { send_jis_key(KC_2, true, physical_shift); }     else { send_jis_key(KC_7, true, physical_shift); } break;
                           case KC_BSLS: if (logical_shift) { send_jis_key(KC_INT3, true, physical_shift); }  else { send_jis_key(KC_BSLS, false, physical_shift); } break;
-                          // チルダ（Shiftあり）ならJISの「^」キーにShiftをかけ、バッククォート（Shiftなし）ならJISの「@」キーにShiftをかける
                           case KC_GRV:  if (logical_shift) { send_jis_key(KC_EQL, true, physical_shift); }   else { send_jis_key(KC_LBRC, true, physical_shift); } break;
                       }
                       return false;
